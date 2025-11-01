@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% load static humanize %}
+{% block title %}{{ customer.name }} — Ledger{% endblock %}
+{% block page_title %}Ledger Statement{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+  <div class="flex items-center justify-between">
+    <!-- Left: Buttons open modals -->
+    <div class="flex items-center gap-3">
+      <label for="modal-add-ledger" class="btn btn-success btn-sm">Add Ledger</label>
+      <label for="modal-pay-ledger" class="btn btn-error btn-sm">Pay Ledger</label>
+    </div>
+
+    <div class="text-sm text-slate-400">
+      <a href="{% url 'customers:ledger' customer.id %}" class="hover:underline">Refresh</a>
+    </div>
+  </div>
+
+  <!-- Center title -->
+  <div class="text-center">
+    <h1 class="text-2xl font-bold">{{ customer.name }}</h1>
+    <div class="text-slate-400">Ledger Statement</div>
+  </div>
+
+  <!-- Ledger table -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body p-0">
+      <div class="overflow-x-auto">
+        <table class="table w-full">
+          <thead>
+            <tr class="bg-slate-50">
+              <th class="text-left">Date</th>
+              <th class="text-left">Detail</th>
+              <th class="text-right">Debit / Ledger Amount</th>
+              <th class="text-right">Credit / Payment Amount</th>
+            </tr>
+          </thead>
+
+          <tbody id="ledger-tbody">
+            {% for row in ledgers %}
+            <tr class="hover:bg-base-200">
+              <td class="whitespace-nowrap">{{ row.date|date:"Y-m-d" }}</td>
+              <td>{{ row.detail|default:"-" }}</td>
+              <td class="text-right">{{ row.debit_amount|default:0|floatformat:2 }}</td>
+              <td class="text-right">{{ row.credit_amount|default:0|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr id="no-ledgers">
+              <td colspan="4" class="text-center py-8 text-base-content/60">No ledger entries yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+
+          {% if ledgers %}
+          <tfoot>
+            <tr class="border-t">
+              <td></td>
+              <td class="font-medium text-right">Totals</td>
+              <td class="text-right font-semibold" id="total-debit">{{ total_debit|floatformat:2 }}</td>
+              <td class="text-right font-semibold" id="total-credit">{{ total_credit|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD LEDGER Modal -->
+<input type="checkbox" id="modal-add-ledger" class="modal-toggle" />
+<label for="modal-add-ledger" class="modal cursor-pointer">
+  <label class="modal-box relative max-w-lg" for="">
+    <h3 class="text-lg font-bold mb-3">Add Ledger (Debit)</h3>
+
+    <form id="form-add-ledger" method="post" action="{% url 'customers:ledger_add' customer.id %}" class="space-y-3">
+      {% csrf_token %}
+      <div>
+        <label class="block mb-1 font-medium">Date</label>
+        <input type="date" name="date" class="input input-md input-bordered w-full" required>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-add-date"></p>
+      </div>
+
+      <div>
+        <label class="block mb-1 font-medium">Debit Amount</label>
+        <input type="number" name="debit_amount" step="0.01" min="0" class="input input-md input-bordered w-full" required>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-add-debit_amount"></p>
+      </div>
+
+      <div>
+        <label class="block mb-1 font-medium">Detail</label>
+        <textarea name="detail" class="textarea textarea-bordered w-full h-24"></textarea>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-add-detail"></p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <label for="modal-add-ledger" class="btn btn-ghost">Cancel</label>
+        <button type="submit" id="btn-add-ledger" class="btn btn-success">Add</button>
+      </div>
+    </form>
+  </label>
+</label>
+
+<!-- PAY LEDGER Modal -->
+<input type="checkbox" id="modal-pay-ledger" class="modal-toggle" />
+<label for="modal-pay-ledger" class="modal cursor-pointer">
+  <label class="modal-box relative max-w-lg" for="">
+    <h3 class="text-lg font-bold mb-3">Pay Ledger (Credit)</h3>
+
+    <form id="form-pay-ledger" method="post" action="{% url 'customers:ledger_pay' customer.id %}" class="space-y-3">
+      {% csrf_token %}
+      <div>
+        <label class="block mb-1 font-medium">Date</label>
+        <input type="date" name="date" class="input input-md input-bordered w-full" required>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-pay-date"></p>
+      </div>
+
+      <div>
+        <label class="block mb-1 font-medium">Credit Amount</label>
+        <input type="number" name="credit_amount" step="0.01" min="0" class="input input-md input-bordered w-full" required>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-pay-credit_amount"></p>
+      </div>
+
+      <div>
+        <label class="block mb-1 font-medium">Detail</label>
+        <textarea name="detail" class="textarea textarea-bordered w-full h-24"></textarea>
+        <p class="mt-1 text-sm text-red-400 hidden" id="err-pay-detail"></p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <label for="modal-pay-ledger" class="btn btn-ghost">Cancel</label>
+        <button type="submit" id="btn-pay-ledger" class="btn btn-error">Pay</button>
+      </div>
+    </form>
+  </label>
+</label>
+
+<!-- AJAX script (inlined for simplicity) -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // helpers
+  const qs = (s, ctx=document) => ctx.querySelector(s);
+  const qsa = (s, ctx=document) => Array.from(ctx.querySelectorAll(s));
+  const escapeHtml = (s) => s == null ? '' : String(s)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+
+  function showErrors(prefix, errors) {
+    // errors = { field: [msg, ...] }
+    Object.keys(errors).forEach(field => {
+      const el = qs(`#err-${prefix}-${field}`);
+      if (el) { el.textContent = (errors[field]||[]).join(' '); el.classList.remove('hidden'); }
+    });
+  }
+
+  function clearErrors(prefix) {
+    qsa(`#form-${prefix} .text-red-400`).forEach(el => { el.classList.add('hidden'); el.textContent = ''; });
+    // also clear specific ids
+    qsa(`[id^="err-${prefix}-"]`).forEach(el => { el.classList.add('hidden'); el.textContent = ''; });
+  }
+
+  // simpler clear: hide any err-* elements
+  function clearAllErrors() {
+    qsa('[id^="err-"]').forEach(el => { el.classList.add('hidden'); el.textContent = ''; });
+  }
+
+  // insert row (prepend)
+  function prependRow(entry) {
+    const tbody = qs('#ledger-tbody');
+    if (!tbody) return;
+    const noRow = qs('#no-ledgers');
+    if (noRow) noRow.remove();
+
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-base-200';
+    tr.innerHTML = `
+      <td class="whitespace-nowrap">${escapeHtml(entry.date)}</td>
+      <td>${escapeHtml(entry.detail || '-')}</td>
+      <td class="text-right">${Number(entry.debit_amount||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td class="text-right">${Number(entry.credit_amount||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+    `;
+    tbody.prepend(tr);
+  }
+
+  function updateTotals(totalDebit, totalCredit) {
+    const td = qs('#total-debit');
+    const tc = qs('#total-credit');
+    if (td) td.textContent = Number(totalDebit||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (tc) tc.textContent = Number(totalCredit||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  // bind form - generic
+  function bindForm(formSelector, btnSelector, modalCheckboxId) {
+    const form = qs(formSelector);
+    const btn = qs(btnSelector);
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      clearAllErrors();
+      btn.disabled = true;
+      btn.classList.add('loading');
+
+      const action = form.getAttribute('action');
+      const data = new FormData(form);
+
+      fetch(action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: data
+      })
+      .then(async resp => {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        if (!resp.ok) {
+          const err = await resp.json().catch(()=>({}));
+          throw err;
+        }
+        return resp.json();
+      })
+      .then(json => {
+        if (json.success) {
+          // insert new row
+          prependRow(json.entry);
+          // update totals
+          updateTotals(json.total_debit, json.total_credit);
+          // reset and close modal
+          form.reset();
+          const cb = document.getElementById(modalCheckboxId);
+          if (cb) cb.checked = false;
+        } else {
+          alert('Unexpected server response');
+          console.error(json);
+        }
+      })
+      .catch(err => {
+        if (err && err.errors) {
+          // map errors to fields: Django returns {field: ['msg']}
+          Object.keys(err.errors).forEach(fld => {
+            // two possible id patterns:
+            const el1 = qs(`#err-add-${fld}`);
+            const el2 = qs(`#err-pay-${fld}`);
+            const el3 = qs(`#err-${fld}`);
+            const target = el1 || el2 || el3;
+            if (target) {
+              target.textContent = (err.errors[fld]||[]).join(' ');
+              target.classList.remove('hidden');
+            }
+          });
+        } else if (err && err.error) {
+          alert(err.error);
+        } else {
+          alert('An unexpected error occurred. Check console.');
+          console.error(err);
+        }
+      });
+    });
+  }
+
+  // hook forms:
+  bindForm('#form-add-ledger', '#btn-add-ledger', 'modal-add-ledger');
+  bindForm('#form-pay-ledger', '#btn-pay-ledger', 'modal-pay-ledger');
+});
+</script>
+{% endblock %}

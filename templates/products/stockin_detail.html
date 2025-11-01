@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}StockIn #{{ stockin.id }}{% endblock %}
+{% block page_title %}StockIn Detail{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="card p-4 bg-base-100 shadow">
+    <h3 class="font-semibold">Stock In Details</h3>
+    <ul class="mt-3 space-y-2">
+      <li><strong>Product:</strong> {{ stockin.product.name }}</li>
+      <li><strong>Quantity:</strong> {{ stockin.stock_quantity }}</li>
+      <li><strong>Buying price:</strong> {{ stockin.buying_price_item }}</li>
+      <li><strong>Total:</strong> {{ stockin.total_buying_amount }}</li>
+      <li><strong>Date:</strong> {{ stockin.date }}</li>
+    </ul>
+  </div>
+
+  <div class="card p-4 bg-base-100 shadow">
+    <h3 class="font-semibold">Add Another Stock</h3>
+    <!-- Modal-like small inline form (we use same form) -->
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      {{ form.product }}
+      {{ form.buying_price_item }}
+      {{ form.stock_quantity }}
+      {{ form.date }}
+      <div class="flex justify-end gap-2">
+        <a href="{% url 'products:stockin_list' %}" class="btn btn-ghost">Back</a>
+        <button class="btn btn-primary">Add Stock</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

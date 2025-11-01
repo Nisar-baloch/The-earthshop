@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ invoice.id }}{% endblock %}
+{% block page_title %}Invoice {{ invoice.id }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-xl font-semibold">Invoice #{{ invoice.id }}</h3>
+          <p class="text-sm text-muted">Date: {{ invoice.date }}</p>
+          <p class="text-sm text-muted">Customer: {{ invoice.customer.name if invoice.customer else '—' }}</p>
+        </div>
+        <div class="text-right">
+          <div class="text-sm">Payment Type: {{ invoice.payment_type }}</div>
+          <div class="text-lg font-bold">Grand Total: {{ invoice.grand_total|default:"0.00" }}</div>
+        </div>
+      </div>
+
+      <div class="mt-4 overflow-x-auto">
+        <!-- If you store purchased items, loop them -->
+        <table class="table table-compact w-full">
+          <thead>
+            <tr>
+              <th>Item</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% comment %} Replace with real items if available (e.g., invoice.purchased_items.all) {% endcomment %}
+            {% for it in invoice.purchaseditem_set.all %}
+            <tr>
+              <td>{{ it.item }}</td>
+              <td class="text-right">{{ it.quantity }}</td>
+              <td class="text-right">{{ it.price }}</td>
+              <td class="text-right">{{ it.purchase_amount }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center py-6 text-gray-500">No line items recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 flex justify-end gap-4">
+        <a class="btn btn-outline" href="{% url 'sales:invoice_list' %}">Back</a>
+        <button onclick="window.print()" class="btn btn-primary">Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

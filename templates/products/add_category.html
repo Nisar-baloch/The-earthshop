@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Add Category{% endblock %}
+{% block page_title %}Add Category{% endblock %}
+
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="text-lg font-semibold mb-4">Create new category</h3>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        {% if form %}
+          <!-- If view provides a Django form, render its fields (recommended to set widget classes in forms.py) -->
+          <div>
+            <label class="label"><span class="label-text">Name</span></label>
+            <input type="text" name="{{ form.name.html_name }}" 
+                           value="{{ form.name.value|default:'' }}" 
+                           class="input input-md input-bordered" 
+                           placeholder="Enter category name" required />
+           
+            {% for err in form.name.errors %}<p class="text-error text-sm">{{ err }}</p>{% endfor %}
+          </div>
+
+          <div>
+            <label class="label"><span class="label-text">Description</span></label>
+            <input type="text" name="{{ form.description.html_name }}" 
+                         class="textarea" placeholder="Bio"></textarea> 
+                           
+            
+            {% for err in form.description.errors %}<p class="text-error text-sm">{{ err }}</p>{% endfor %}
+          </div>
+
+          <div>
+            <label class="label"><span class="label-text">Date</span></label>
+            <!-- If your form has a date field, it will render here -->
+            {{ form.date }}
+            {% for err in form.date.errors %}<p class="text-error text-sm">{{ err }}</p>{% endfor %}
+          </div>
+
+        {% else %}
+          <!-- If you are not yet using a Django form, raw inputs will be sent as POST -->
+          <div>
+            <label class="label"><span class="label-text">Name</span></label>
+            <input name="name" type="text" class="input input-md input-bordered "  required>
+          </div>
+
+          <div>
+            <label class="label"><span class="label-text">Description</span></label>
+            <textarea name="description" class="textarea textarea-bordered-md" rows="4"></textarea>
+          </div>
+
+          <div>
+            <label class="label"><span class="label-text">Date</span></label>
+            <input name="date" type="date" class="input input-bordered w-full">
+          </div>
+        {% endif %}
+
+        <div class="flex justify-end gap-2 pt-3">
+          <a href="{% url 'products:product_list' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

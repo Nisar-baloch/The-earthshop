@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="min-h-screen bg-base-200 p-6">
+  <div class="max-w-6xl mx-auto">
+    <!-- HEADER -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold text-primary">🏦 Bank Accounts</h1>
+      <a href="{% url 'banking:add' %}" class="btn btn-primary">
+        + Add Bank
+      </a>
+    </div>
+
+    <!-- TABLE CARD -->
+    <div class="card bg-base-100 shadow-xl rounded-2xl">
+      <div class="card-body overflow-x-auto">
+        <table class="table table-zebra w-full">
+          <thead class="text-base font-semibold">
+            <tr class="text-left">
+              <th>#</th>
+              <th>Bank Name</th>
+              <th>Branch</th>
+              <th>Account Number</th>
+              <th class="text-right">Balance</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for banking in bankings %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td class="font-medium">{{ bank.bank_name }}</td>
+              <td>{{ bank.branch_name }}</td>
+              <td>{{ bank.account_number }}</td>
+              <td class="text-right">{{ bank.balance|default:"0.00" }}</td>
+              <td class="text-center">
+                <div class="flex justify-center gap-2">
+                  <a href="" class="btn btn-xs btn-info">View</a>
+                  <a href="" class="btn btn-xs btn-warning">Update</a>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-gray-500 py-6">
+                No banks added yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Add Stock{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="card p-6 bg-base-100 shadow">
+    <h3 class="text-lg font-semibold mb-4">Add Stock Item</h3>
+
+    {% if product %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium">Name & Category <span style="color:red">*</span></label>
+        <input type="text" class="input input-bordered w-full" value="{{ product_display }}" readonly>
+      </div>
+    {% endif %}
+
+    <form method="post" id="stockin-form" class="space-y-4">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      {% if not product %}
+        <div>
+          <label class="label"><span class="label-text">Product</span></label>
+          {{ form.product }}
+        </div>
+      {% else %}
+        {# ensure the product field is present (hidden) so form posts product id even if select hidden #}
+        {{ form.product.as_hidden }}
+      {% endif %}
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label"><span class="label-text">Buying Price / Item</span></label>
+          {{ form.buying_price_item }}
+        </div>
+        <div>
+          <label class="label"><span class="label-text">Buying Percent (%)</span></label>
+          {{ form.buying_percent }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label"><span class="label-text">Stock Quantity</span></label>
+          {{ form.stock_quantity }}
+        </div>
+        <div>
+          <label class="label"><span class="label-text">Date Stock In</span></label>
+          {{ form.date }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mt-3">
+        <div>
+          <label class="label"><span class="label-text">Selling Price / Item</span></label>
+          {{ form.selling_price_item }}
+        </div>
+        <div>
+          <label class="label"><span class="label-text">Total Selling Amount</span></label>
+          <input id="total_selling_amount" type="text" class="input input-bordered w-full" readonly>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <label class="label"><span class="label-text">Total Buying Amount</span></label>
+        <input id="total_buying_amount" type="text" class="input input-bordered w-full" readonly>
+      </div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <a href="{% if product %}{% url 'products:product_stockins' product.id %}{% else %}{% url 'products:stockin_list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Stock</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  // find form inputs by name attributes Django renders (adjust if your widgets differ)
+  const buyPrice = document.querySelector('[name="buying_price_item"]');
+  const buyPercent = document.querySelector('[name="buying_percent"]');
+  const qty = document.querySelector('[name="stock_quantity"]');
+  const sellPrice = document.querySelector('[name="selling_price_item"]');
+
+  const totalBuyEl = document.getElementById('total_buying_amount');
+  const totalSellEl = document.getElementById('total_selling_amount');
+
+  function toNum(v){ return Number(v || 0); }
+  function fmt(v){ return (Number(v) || 0).toFixed(2); }
+
+  function recompute(){
+    const bp = toNum(buyPrice && buyPrice.value);
+    const pct = toNum(buyPercent && buyPercent.value);
+    const q = toNum(qty && qty.value);
+    const sp = toNum(sellPrice && sellPrice.value);
+
+    // total buying: price * qty * (1 + percent/100)
+    const totalBuying = bp * q * (1 + (pct/100));
+    const totalSelling = sp * q;
+
+    if(totalBuyEl) totalBuyEl.value = fmt(totalBuying);
+    if(totalSellEl) totalSellEl.value = fmt(totalSelling);
+  }
+
+  [buyPrice, buyPercent, qty, sellPrice].forEach(i=>{
+    if(i) i.addEventListener('input', recompute);
+  });
+
+  // initial compute
+  document.addEventListener('DOMContentLoaded', recompute);
+})();
+</script>
+{% endblock %}

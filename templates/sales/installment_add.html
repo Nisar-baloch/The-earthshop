@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Add Installment{% endblock %}
+{% block page_title %}Add Installment{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <h3 class="text-lg font-semibold">Add Installment for Invoice #{{ invoice.id }}</h3>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div>
+          <label class="label"><span class="label-text">Paid Amount</span></label>
+          {{ form.paid_amount }}
+        </div>
+        <div>
+          <label class="label"><span class="label-text">Description</span></label>
+          {{ form.description }}
+        </div>
+        <div>
+          <label class="label"><span class="label-text">Date</span></label>
+          {{ form.date }}
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <a href="{% url 'sales:installment_list' invoice.id %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-success">Save</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Installments for Invoice {{ invoice_id }}{% endblock %}
+{% block page_title %}Installments{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="flex justify-between items-center mb-3">
+    <h3 class="text-lg font-semibold">Installments for Invoice #{{ invoice_id }}</h3>
+    <a class="btn btn-primary btn-sm" href="{% url 'sales:installment_add' invoice_id %}">Add Installment</a>
+  </div>
+
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <div class="text-sm mb-3">Total Paid: <strong>{{ total_paid_amount }}</strong> • Remaining: <strong>{{ remaining_amount }}</strong></div>
+      <table class="table table-zebra w-full">
+        <thead>
+          <tr><th>#</th><th>Amount</th><th>Description</th><th>Date</th><th class="text-center">Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for inst in object_list %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ inst.paid_amount }}</td>
+            <td>{{ inst.description|default:"-" }}</td>
+            <td>{{ inst.date }}</td>
+            <td class="text-center">
+              <form method="post" action="{% url 'sales:installment_delete' inst.id %}" onsubmit="return confirm('Delete?');">
+                {% csrf_token %}
+                <button class="btn btn-xs btn-error">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center py-6 text-gray-500">No installments yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

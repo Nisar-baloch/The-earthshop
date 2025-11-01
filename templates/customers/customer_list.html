@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Customers{% endblock %}
+{% block page_title %}Customers{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-4">
+
+  <div class="flex items-center justify-between">
+    <h2 class="text-xl font-semibold">Customers</h2>
+  
+    <a href="{% url 'customers:add' %}" class="btn btn-sm btn-primary"Add (non-AJAX)>Add Customer</a>
+  </div>
+
+  <!-- Card / Table -->
+  <div class="card bg-base-100 shadow">
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Father Name</th>
+            <th>City</th>
+            <th>Alternate Mobile</th>
+            <td>cnic</td>
+            <th>Resident</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="customer-tbody">
+          {% for c in customers %}
+          <tr id="customer-row-{{ c.id }}">
+            <td class="font-medium">{{ c.name }}</td>
+            <td>{{ c.father_name|default:"-" }}</td>
+            <td>{{ c.city|default:"-" }}</td>
+            <td>{{ c.cnic|default:"-" }}</td>
+            <td>{{ c.alternate_mobile|default:"-" }}</td>
+            <td>{{ c.resident|default:"-" }}</td>
+            <td>{{ c.created_at|date:"Y-m-d H:i" }}</td>
+            <td>
+              <div class="inline-flex gap-2">
+                <a href="{% url 'customers:update' c.id %}" class="btn btn-xs btn-outline">Edit</a>
+                <a href="{% url 'customers:ledger' c.id %}" class="btn btn-xs btn-error">Ledger</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr id="no-customers">
+            <td colspan="7" class="text-center py-8 text-base-content/60">No customers yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+    <!-- END form -->
+
+    
+
+<!-- Inline AJAX script (or load externally) -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('ajax-add-customer-form');
+  const submitBtn = document.getElementById('submit-customer-btn');
+  const tbody = document.getElementById('customer-tbody');
+  const noCustomersRow = document.getElementById('no-customers');
+
+  function clearErrors() {
+    ['name','father_name','city','alternate_mobile','resident','address'].forEach(field => {
+      const el = document.getElementById('error-' + field);
+      if (el) {
+        el.classList.add('hidden');
+        el.textContent = '';
+      }
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    clearErrors();
+    submitBtn.disabled = true;
+    submitBtn.classList.add('loading');
+
+    const url = form.getAttribute('action');
+    const formData = new FormData(form);
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: formData
+    })
+    .then(async resp => {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('loading');
+      if (resp.ok) return resp.json();
+      const err = await resp.json().catch(()=> ({}));
+      throw { status: resp.status, body: err };
+    })
+    .then(data => {
+      if (data.success) {
+        const c = data.customer;
+        if (noCustomersRow) noCustomersRow.remove();
+        const tr = document.createElement('tr');
+        tr.id = `customer-row-${c.id}`;
+        tr.innerHTML = `
+          <td class="font-medium">${escapeHtml(c.name)}</td>
+          <td>${escapeHtml(c.father_name || '-')}</td>
+          <td>${escapeHtml(c.city || '-')}</td>
+          <td>${escapeHtml(c.alternate_mobile || '-')}</td>
+          <td>${escapeHtml(c.resident || '-')}</td>
+          <td>${escapeHtml(c.created_at)}</td>
+          <td>
+            <div class="inline-flex gap-2">
+              <a href="#" class="btn btn-xs btn-outline">Edit</a>
+              <a href="#" class="btn btn-xs btn-error">Delete</a>
+            </div>
+          </td>
+        `;
+        tbody.prepend(tr);
+        form.reset();
+        document.getElementById('add-customer-modal').checked = false;
+        // small toast — replace with your system
+        alert('Customer added successfully.');
+      }
+    })
+    .catch(err => {
+      if (err.body && err.body.errors) {
+        const errors = err.body.errors;
+        Object.keys(errors).forEach(key => {
+          const el = document.getElementById('error-' + key);
+          if (el) {
+            el.textContent = errors[key].join(' ');
+            el.classList.remove('hidden');
+          }
+        });
+      } else {
+        alert('An unexpected error occurred. Check console.');
+        console.error(err);
+      }
+    });
+  });
+
+  function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+  }
+});
+</script>
+{% endblock %}

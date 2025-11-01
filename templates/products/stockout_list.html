@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Stock Out - {{ product.name }}{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-2xl font-bold">{{ product.name }} | {{ product.category.name }} Stock Out</h2>
+  <a href="{% url 'products:add_stock_out' product.id %}" class="btn btn-sm btn-primary">Add Stock Out</a>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table w-full">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product</th>
+          <th>Stock Out Quantity</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stockouts %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ s.product.name }}</td>
+          <td>{{ s.stock_out_quantity }}</td>
+          <td>{{ s.date|date:"Y-m-d" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center py-4 text-gray-500">No stockouts yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

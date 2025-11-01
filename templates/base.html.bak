@@ -1,0 +1,195 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}EarthShop{% endblock %}</title>
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <!-- Font Awesome for icons (replacing Bootstrap Icons) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-base-200">
+    <!-- Drawer for sidebar (responsive, mobile-friendly) -->
+    <div class="drawer lg:drawer-open">
+        <input id="sidebar-toggle" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content flex flex-col">
+            <!-- Navbar -->
+            <div class="navbar bg-base-100 shadow-md">
+                <div class="flex-none lg:hidden">
+                    <label for="sidebar-toggle" class="btn btn-square btn-ghost">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </label>
+                </div>
+                <div class="flex-1">
+                    <a href="/" class="btn btn-ghost text-xl font-bold">🌱 EarthShop</a>
+                </div>
+                <div class="flex-none gap-2">
+                    <button id="themeToggle" class="btn btn-outline btn-sm" title="Toggle theme">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                    {% if user.is_authenticated %}
+                        <span class="text-sm text-base-content/70">Hi, {{ user.username }}</span>
+                        <a href="{% url 'logout' %}" class="btn btn-error btn-sm">Logout</a>
+                    {% else %}
+                        <a href="{% url 'login' %}" class="btn btn-success btn-sm">Login</a>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Main Content -->
+            <main class="container mx-auto py-6 px-4 flex-grow">
+                {% block content %}{% endblock %}
+            </main>
+            <!-- Footer -->
+            <footer class="footer footer-center bg-base-100 text-base-content/70 py-4 border-t border-base-300">
+                <p>&copy; {{ year|default:2025 }} 🌱 EarthShop</p>
+            </footer>
+        </div>
+        <!-- Sidebar -->
+        <div class="drawer-side">
+            <label for="sidebar-toggle" class="drawer-overlay"></label>
+            <aside class="bg-base-100 h-full w-64 shadow-xl p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <a href="/" class="text-2xl font-bold flex items-center gap-2">
+                        <span>🌱</span> EarthShop
+                    </a>
+                    <label for="sidebar-toggle" class="btn btn-sm btn-ghost lg:hidden">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </label>
+                </div>
+                <ul class="menu menu-compact flex flex-col gap-1">
+                    <!-- Products -->
+                    <li class="menu-title">Products</li>
+                    <li>
+                        <details>
+                            <summary class="font-medium">
+                                <i class="fa-solid fa-box mr-2"></i> Products
+                            </summary>
+                            <ul class="bg-base-200 rounded-md p-2">
+                                <li><a href="{% url 'products:add_product' %}">Add Product</a></li>
+                                <li><a href="{% url 'products:list' %}">List Products</a></li>
+                                <li><a href="{% url 'products:add_category' %}">Add Category</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <!-- Customers -->
+                    <li class="menu-title">Customers</li>
+                    <li>
+                        <details>
+                            <summary class="font-medium">
+                                <i class="fa-solid fa-users mr-2"></i> Customers
+                            </summary>
+                            <ul class="bg-base-200 rounded-md p-2">
+                                <li><a href="{% url 'customers:add' %}">Add Customer</a></li>
+                                <li><a href="{% url 'customers:list' %}">Customer List</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <!-- Banking -->
+                    <li class="menu-title">Banking</li>
+                    <li>
+                        <details>
+                            <summary class="font-medium">
+                                <i class="fa-solid fa-bank mr-2"></i> Banking
+                            </summary>
+                            <ul class="bg-base-200 rounded-md p-2">
+                                <li><a href="{% url 'banking:add' %}">Add Bank</a></li>
+                                <li><a href="{% url 'banking:list' %}">Bank List</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <!-- Sales & Expenses -->
+                    <li class="menu-title">Sales & Expenses</li>
+                    <li>
+                        <details>
+                            <summary class="font-medium">
+                                <i class="fa-solid fa-receipt mr-2"></i> Sales & Expenses
+                            </summary>
+                            <ul class="bg-base-200 rounded-md p-2">
+                                <li><a href="{% url 'sales:create_invoice' %}">Create Invoice</a></li>
+                                <li><a href="{% url 'sales:list_invoices' %}">Invoices List</a></li>
+                                <li><a href="{% url 'expenses:add' %}">Add Expense</a></li>
+                                <li><a href="{% url 'expenses:list' %}">Expense List</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <!-- Logs & Reports -->
+                    <li class="menu-title">Logs & Reports</li>
+                    <li>
+                        <details>
+                            <summary class="font-medium">
+                                <i class="fa-solid fa-chart-line mr-2"></i> Logs & Reports
+                            </summary>
+                            <ul class="bg-base-200 rounded-md p-2">
+                                <li><a href="{% url 'logs:daily' %}">Daily Logs</a></li>
+                                <li><a href="{% url 'logs:monthly' %}">Monthly Logs</a></li>
+                                <li><a href="{% url 'reports:monthly' %}">Monthly Reports</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <!-- Ledger -->
+                    <li class="menu-title">Ledger</li>
+                    <li>
+                        <a href="{% url 'ledger:index' %}">
+                            <i class="fa-solid fa-book mr-2"></i> Ledger
+                        </a>
+                    </li>
+                    <!-- Quick Actions -->
+                    <li class="menu-title">Quick Actions</li>
+                    <li>
+                        <a href="{% url 'sales:create_invoice' %}" class="btn btn-outline btn-sm">
+                            <i class="fa-solid fa-print mr-2"></i> Print Invoice
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="btn btn-outline btn-sm" onclick="alert('Wire up your backup view!')">
+                            <i class="fa-solid fa-cloud-arrow-up mr-2"></i> Backup Now
+                        </a>
+                    </li>
+                </ul>
+            </aside>
+        </div>
+    </div>
+
+    <!-- JavaScript for Theme Toggle and Active Link Highlighting -->
+    <script>
+        // Theme Toggle (Persists in localStorage)
+        (function() {
+            const KEY = 'earthshop-theme';
+            const html = document.documentElement;
+            const btn = document.getElementById('themeToggle');
+            const saved = localStorage.getItem(KEY);
+            if (saved) html.setAttribute('data-theme', saved);
+            const setIcon = () => btn.querySelector('i').className = html.getAttribute('data-theme') === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            setIcon();
+            btn.addEventListener('click', () => {
+                const next = html.getAttribute('data-theme') === 'dark' ? 'cupcake' : 'dark';
+                html.setAttribute('data-theme', next);
+                localStorage.setItem(KEY, next);
+                setIcon();
+            });
+        })();
+
+        // Highlight Active Link and Auto-Open Parent Menu
+        (function() {
+            const here = location.pathname.replace(/\/+$/, '');
+            const links = document.querySelectorAll('.menu a[href]');
+            links.forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                const norm = href.replace(/\/+$/, '');
+                if (norm && norm === here) {
+                    a.classList.add('active');
+                    const details = a.closest('details');
+                    if (details) details.setAttribute('open', '');
+                    const summary = details?.previousElementSibling;
+                    if (summary) summary.classList.add('active');
+                }
+            });
+        })();
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

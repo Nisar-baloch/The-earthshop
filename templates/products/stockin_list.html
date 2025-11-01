@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Stock In List{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex justify-between items-center">
+  <div>
+    {% if product_specific %}
+      <h2 class="text-2xl font-semibold">
+        {{ product.name }}
+        {% if product.category %}
+          | {{ product.category.name }}
+        {% endif %}
+        <span class="text-base font-medium text-gray-500">Stock In</span>
+      </h2>
+    {% else %}
+      <h2 class="text-2xl font-semibold">Stock In</h2>
+    {% endif %}
+  </div>
+  <div>
+    {% if product_specific %}
+      <a href="{% url 'products:add_stock' %}?product={{ product.id }}" class="btn btn-sm btn-outline mr-2">Add Stock (Manual)</a>
+      <a href="{% url 'products:stockin_list' %}" class="btn btn-sm btn-ghost">View All Stock Ins</a>
+    {% else %}
+      <a href="{% url 'products:add_stock' %}" class="btn btn-sm btn-primary">Add Stock</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="card-body overflow-x-auto">
+    <table class="table w-full table-zebra">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product</th>
+          <th class="text-right">Stock Quantity</th>
+          <th class="text-right">Selling Price / Item</th>
+          <th class="text-right">Selling Total</th>
+          <th class="text-right">Buying Price / Item</th>
+          <th class="text-right">Buying %</th>
+          <th class="text-right">Total Buying Amount</th>
+          <th class="text-left">Order Dated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stockins %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ s.product.name }}</td>
+          <td class="text-right">{{ s.stock_quantity|floatformat:2 }}</td>
+          <td class="text-right">{{ s.selling_price_item|floatformat:2 }}</td>
+          <td class="text-right">{{ s.total_selling_amount|floatformat:2 }}</td>
+          <td class="text-right">{{ s.buying_price_item|floatformat:2 }}</td>
+          <td class="text-right">{{ s.buying_percent|floatformat:2 }}</td>
+          <td class="text-right">{{ s.total_buying_amount|floatformat:2 }}</td>
+          <td>{{ s.date|date:"M. d, Y" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="text-center py-8 text-gray-500">No stock-in records for this product.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

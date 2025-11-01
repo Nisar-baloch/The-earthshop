@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="text-center">
+    <img src="{% static 'img/logo.png' %}" alt="Shop Logo" style="width: 100px;">
+    <h2>Invoice #{{ invoice.id }}</h2>
+    <p>Date: {{ invoice.date }}</p>
+    <p>Customer: {{ invoice.customer.name }}</p>
+</div>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Product</th><th>Qty</th><th>Price</th><th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in invoice.items.all %}
+        <tr>
+            <td>{{ item.product.name }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.price }}</td>
+            <td>{{ item.quantity|floatformat:2|add:item.price }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<h4>Total: {{ invoice.total_amount }}</h4>
+<script>window.print();</script>
+{% endblock %}

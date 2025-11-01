@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Products{% endblock %}
+{% block page_title %}Products{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <a href="{% url 'products:add_product' %}" class="btn btn-sm btn-success mr-2">Add Product</a>
+    <a href="{% url 'products:add_category' %}" class="btn btn-sm btn-ghost">Add Category</a>
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table w-full">
+      <thead>
+        <tr>
+          <th class="text-left">Name</th>
+          <th class="text-left">Category</th>
+          <th class="text-right">Purchase</th>
+          <th class="text-right">Total Quantity</th>
+          <th class="text-right">Available</th>
+          <th class="text-left">Date</th>
+          <th class="text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td class="font-medium">{{ p.name }}</td>
+           <!-- ✅ FIX: Safe check for category -->
+          <td>
+            {% if p.category %}
+              {{ p.category.name }}
+            {% else %}
+              -
+            {% endif %}
+</td>
+
+          <td class="text-right">{{ p.buying_price|default:"-" }}</td>
+          <td class="text-right">{{ p.stock|default:"0" }}</td>
+          <td class="text-right">{{ p.stock|default:"0" }}</td>
+          <td>{{ p.date|date:"Y-m-d" }}</td>
+          <td class="text-right">
+            
+         
+ <div class="inline-flex gap-2">
+  <a href="{% url 'products:update_product' p.id %}" class="btn btn-xs btn-outline">Update</a>
+
+  <!-- ✅ Go to product-specific StockIn list first -->
+  <a href="{% url 'products:product_stockins' p.id %}" class="btn btn-xs btn-success">Stock In</a>
+
+  <!-- Manual Add StockOut form still OK -->
+<a href="{% url 'products:product_stockouts' p.id %}" class="btn btn-xs btn-error">Stock Out</a>
+
+</div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center py-8 text-base-content/60">No products yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+   
+  </div>
+</div>
+
+ <div class="flex justify-center my-6">
+  <img src="{% static 'images/data.gif' %}" alt="Products Stats" class="max-w-sm w-100 rounded-lg shadow-lg">
+</div>
+{% endblock %}

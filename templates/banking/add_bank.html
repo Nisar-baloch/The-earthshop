@@ -1,0 +1,40 @@
+  {% extends 'base.html' %}
+{% load static %}
+{% block title %}Add Bank{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white rounded-2xl shadow p-8 mt-10">
+  <h2 class="text-2xl font-bold text-green-700 mb-6 text-center">🏦 Add New Bank</h2>
+
+  <form method="POST" class="space-y-5">
+    {% csrf_token %}
+
+    <!-- Bank Name -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700 mb-2">Bank Name</label>
+      <input type="text" name="bank_name" placeholder="Enter bank name"
+        class="input input-bordered w-full border-gray-300 focus:ring-2 focus:ring-green-500" required>
+    </div>
+
+    <!-- Branch Name -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700 mb-2">Branch Name</label>
+      <input type="text" name="branch_name" placeholder="Enter branch name"
+        class="input input-bordered w-full border-gray-300 focus:ring-2 focus:ring-green-500" required>
+    </div>
+
+    <!-- Account Number -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700 mb-2">Account Number</label>
+      <input type="text" name="account_number" placeholder="Enter account number"
+        class="input input-bordered w-full border-gray-300 focus:ring-2 focus:ring-green-500" required>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex justify-end gap-3 mt-6">
+      <a href="" class="btn btn-outline btn-secondary">Cancel</a>
+      <button type="submit" class="btn btn-success">Save Bank</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

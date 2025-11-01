@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Add Stock Out - {{ product.name }}{% endblock %}
+{% block content %}
+
+<div class="card bg-base-100 shadow-lg p-6 max-w-xl mx-auto">
+  <h2 class="text-xl font-bold mb-4">Add Stock Out for {{ product.name }} | {{ product.category.name }}</h2>
+
+  <form method="POST" class="space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="label">Name & Category</label>
+      <input type="text" value="{{ product.name }} | {{ product.category.name }}" class="input input-bordered w-full" readonly>
+    </div>
+
+    <div>
+      <label class="label">Stock Out Quantity</label>
+      {{ form.stock_out_quantity }}
+    </div>
+
+    <div>
+      <label class="label">Date</label>
+      {{ form.date }}
+    </div>
+
+    <div class="flex justify-end mt-4">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="{% url 'products:product_stockouts' product.id %}" class="btn btn-ghost ml-2">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

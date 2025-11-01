@@ -1,0 +1,18 @@
+Django==5.2.4
+django-tailwind==3.8.0
+django-browser-reload==1.12.1
+django-crispy-forms==2.3
+crispy-tailwind==0.5.0
+
+# Optional but useful for production
+gunicorn==23.0.0
+whitenoise==6.7.0
+
+# Database (if using PostgreSQL, uncomment below)
+# psycopg2-binary==2.9.9
+
+# For environment variables
+python-decouple==3.8
+
+# Pillow for image fields (e.g., product/customer images)
+Pillow==10.4.0
