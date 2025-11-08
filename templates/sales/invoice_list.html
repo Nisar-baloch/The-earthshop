@@ -1,65 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Invoices{% endblock %}
-{% block page_title %}Invoices{% endblock %}
+{% block title %}Invoice List{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h2 class="text-lg font-semibold">Invoices</h2>
-  <div class="flex gap-2">
-    <a href="{% url 'sales:create_invoice' %}" class="btn btn-primary btn-sm">+ Create Invoice</a>
-  </div>
-</div>
+<h2 class="text-2xl font-bold mb-4">Invoice List</h2>
+
+<form method="get" class="mb-4 flex gap-2">
+  <input name="q_name" placeholder="Search by Name ..." class="input input-bordered" value="{{ request.GET.q_name }}">
+  <input name="q_invoice" placeholder="Search by Invoice No ..." class="input input-bordered" value="{{ request.GET.q_invoice }}">
+  <input name="q_date" type="date" class="input input-bordered" value="{{ request.GET.q_date }}">
+  <button class="btn btn-primary">Search</button>
+</form>
 
 <div class="card bg-base-100 shadow">
-  <div class="card-body overflow-x-auto">
-    <table class="table table-zebra w-full">
+  <div class="overflow-x-auto">
+    <table class="table w-full">
       <thead>
         <tr>
-          <th>#</th>
-          <th>Customer</th>
-          <th>Date</th>
-          <th class="text-right">Grand Total</th>
-          <th class="text-right">Paid</th>
-          <th class="text-right">Remaining</th>
-          <th class="text-center">Actions</th>
+          <th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Installment</th><th>Quantity</th><th>Sub Total</th><th>Grand Total</th><th>Action</th>
         </tr>
       </thead>
       <tbody>
-        {% for inv in object_list %}
+        {% for inv in invoices %}
         <tr>
-          <td>{{ inv.id }}</td>
-          <td>{{ inv.customer.name if inv.customer else '—' }}</td>
-          <td>{{ inv.date }}</td>
-          <td class="text-right">{{ inv.grand_total|default:"0.00" }}</td>
-          <td class="text-right">{{ inv.paid_amount|default:"0.00" }}</td>
-          <td class="text-right">{{ inv.remaining_payment|default:"0.00" }}</td>
-          <td class="text-center">
-            <div class="flex justify-center gap-2">
-              <a class="btn btn-xs btn-info" href="{% url 'sales:invoice_detail' inv.id %}">View</a>
-              <a class="btn btn-xs btn-outline" href="{% url 'sales:installment_list' inv.id %}">Installments</a>
-            </div>
+          <td>{{ inv.date|date:"M. d, Y" }}</td>
+          <td>{{ inv }}</td>
+          <td>
+  {% if inv.customer %}
+    {{ inv.customer.name }}
+  {% else %}
+    -
+  {% endif %}
+</td>
+
+          <td>{{ inv.payment_type }}</td>
+          <td>
+            {% if inv.has_installment %}
+              <span class="text-green-600">✔</span>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>{{ inv.total_quantity }}</td>
+          <td>{{ inv.sub_total }}</td>
+          <td>{{ inv.grand_total }}</td>
+          <td>
+            <a class="btn btn-sm btn-info" href="{% url 'sales:invoice_detail' inv.id %}">View</a>
+            <a class="btn btn-sm btn-warning" href="{% url 'sales:installment_list' inv.id %}">Installments</a>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center py-8 text-gray-500">No invoices yet.</td></tr>
+        <tr><td colspan="9" class="text-center py-8">No invoices.</td></tr>
         {% endfor %}
       </tbody>
     </table>
-
-    <!-- pagination if provided -->
-    {% if is_paginated %}
-    <div class="mt-4 flex justify-center">
-      <ul class="btn-group">
-        {% if page_obj.has_previous %}
-          <a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">Prev</a>
-        {% endif %}
-        <li class="btn btn-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
-        {% if page_obj.has_next %}
-          <a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">Next</a>
-        {% endif %}
-      </ul>
-    </div>
-    {% endif %}
   </div>
+</div>
+
+<div class="mt-4">
+  {% if invoices.has_other_pages %}
+    <div class="btn-group">
+      {% if invoices.has_previous %}<a class="btn" href="?page={{ invoices.previous_page_number }}">Prev</a>{% endif %}
+      <span class="btn">Page {{ invoices.number }} of {{ invoices.paginator.num_pages }}</span>
+      {% if invoices.has_next %}<a class="btn" href="?page={{ invoices.next_page_number }}">Next</a>{% endif %}
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

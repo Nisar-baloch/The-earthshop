@@ -1,552 +1,436 @@
 # sales/views.py
 import json
-import importlib
+from decimal import Decimal
+from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.core.paginator import Paginator
-from django.views.generic import (ListView, TemplateView, View, FormView, DeleteView)
-from django.http import JsonResponse, HttpResponseRedirect
-from django.db.models import Sum
-from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-from django.shortcuts import render, get_object_or_404
-from django.urls import reverse, reverse_lazy
-from django import forms
+from django.contrib import messages
+from django.utils import timezone
 
-from .models import Invoice, InvoiceInstallment
+from .models import Invoice, InvoiceItem, InvoiceInstallment
+from .forms import InvoiceForm, InvoiceItemForm, InvoiceInstallmentForm
+from products.models import Product
+from customers.models import Customer
+from products.models import StockOut  # adjust path if your app is named differently
+from banking.models import Bank  # adjust if app label differs
 
-# helper: try import with common app name variants
-def try_import(module_prefix, name):
+
+def create_invoice(request):
     """
-    Try import `name` from module names:
-      - module_prefix (as given, e.g. 'customer.models')
-      - plural form module_prefix + 's' (e.g. 'customers.models')
-    Return the attribute or raise ImportError.
+    GET: render create invoice page (POS-like UI).
+    POST: expect 'items' JSON (list of {item_id, qty, price, total}), plus invoice fields.
     """
-    candidates = [module_prefix, module_prefix + 's']
-    for mod in candidates:
-        try:
-            module = importlib.import_module(mod)
-            return getattr(module, name)
-        except (ImportError, AttributeError, ModuleNotFoundError):
-            continue
-    raise ImportError(f"Could not import {name} from {module_prefix} or its variants.")
-
-# Attempt to import related models (customer, product, banking)
-Customer = None
-Product = None
-Bank = None
-
-try:
-    Customer = try_import('customer.models', 'Customer')
-except ImportError:
-    try:
-        Customer = try_import('customers.models', 'Customer')
-    except ImportError:
-        Customer = None
-
-try:
-    Product = try_import('product.models', 'Product')
-except ImportError:
-    try:
-        Product = try_import('products.models', 'Product')
-    except ImportError:
-        Product = None
-
-try:
-    Bank = try_import('banking_system.models', 'Bank')
-except ImportError:
-    try:
-        Bank = try_import('banking.models', 'Bank')
-    except ImportError:
-        Bank = None
-
-# Fallback minimal ModelForm factories if sales.forms or other forms are missing
-def make_modelform_for(model_cls, fields=None):
-    if model_cls is None:
-        # return a generic Form to avoid import errors (won't save)
-        class DummyForm(forms.Form):
-            pass
-        return DummyForm
-    meta_attrs = {'model': model_cls, 'fields': fields or '__all__'}
-    Meta = type('Meta', (), meta_attrs)
-    attrs = {'Meta': Meta}
-    form_cls = type(f'{model_cls.__name__}AutoForm', (forms.ModelForm,), attrs)
-    return form_cls
-
-# -------------------------
-# Avoid creating ModelForm classes at import time.
-# Instead leave them as None and create/use forms inside views if needed.
-# This prevents errors when related models (e.g. banking_system.Bank) are not yet loaded.
-# -------------------------
-
-# Keep the variables defined, but do NOT build ModelForm classes at import.
-InvoiceForm = None
-InvoiceInstallmentForm = None
-CustomerForm = None
-CustomerLedgerForm = None
-StockOutForm = None
-PurchasedItemForm = None
-BankDetailForm = None
-
-# Helper factory to build ModelForm on demand (call inside a request handler)
-def build_modelform(model_cls, fields=None):
-    """
-    Dynamically build a ModelForm for model_cls at runtime.
-    Returns a ModelForm class or None if model_cls is None.
-    """
-    if model_cls is None:
-        return None
-    try:
-        Meta = type('Meta', (), {'model': model_cls, 'fields': fields or '__all__'})
-        form_cls = type(f'{model_cls.__name__}AutoForm', (forms.ModelForm,), {'Meta': Meta})
-        return form_cls
-    except Exception:
-        return None
-
-
-# customer forms
-try:
-    cust_forms = importlib.import_module('customer.forms')
-    CustomerForm = getattr(cust_forms, 'CustomerForm', None)
-    CustomerLedgerForm = getattr(cust_forms, 'CustomerLedgerForm', None)
-except Exception:
-    CustomerForm = None
-    CustomerLedgerForm = None
-
-# product/banking forms
-try:
-    prod_forms = importlib.import_module('product.forms')
-    StockOutForm = getattr(prod_forms, 'StockOutForm', None)
-    PurchasedItemForm = getattr(prod_forms, 'PurchasedItemForm', None)
-except Exception:
-    StockOutForm = None
-    PurchasedItemForm = None
-
-try:
-    bank_forms = importlib.import_module('banking_system.forms')
-    BankDetailForm = getattr(bank_forms, 'BankDetailForm', None)
-except Exception:
-    BankDetailForm = None
-
-# Ensure InvoiceForm exists (fallback)
-if InvoiceForm is None:
-    InvoiceForm = make_modelform_for(Invoice, fields=[
-        'payment_type', 'bank_details', 'total_quantity', 'sub_total',
-        'paid_amount', 'remaining_payment', 'discount', 'shipping',
-        'grand_total', 'cash_payment', 'cash_returned', 'date'
-    ])
-
-if InvoiceInstallmentForm is None:
-    InvoiceInstallmentForm = make_modelform_for(InvoiceInstallment, fields=['invoice', 'paid_amount', 'description', 'date'])
-
-if CustomerForm is None and Customer is not None:
-    CustomerForm = make_modelform_for(Customer, fields='__all__')
-
-if CustomerLedgerForm is None:
-    # If missing, just create a dummy form to avoid import failures. You should implement a real one.
-    class DummyLedgerForm(forms.Form):
-        pass
-    CustomerLedgerForm = DummyLedgerForm
-
-if StockOutForm is None:
-    # Make a minimal StockOut form so code that calls .save() will fail gracefully if model missing
-    class DummyStockOutForm(forms.Form):
-        pass
-    StockOutForm = DummyStockOutForm
-
-if PurchasedItemForm is None:
-    class DummyPurchasedItemForm(forms.Form):
-        pass
-    PurchasedItemForm = DummyPurchasedItemForm
-
-if BankDetailForm is None:
-    class DummyBankDetailForm(forms.Form):
-        pass
-    BankDetailForm = DummyBankDetailForm
-
-
-# ----------------------------
-# Views (adapted)
-# ----------------------------
-
-class InvoiceListView(ListView):
-    template_name = 'sales/invoice_list.html'
-    model = Invoice
-    paginate_by = 100
-
-    def get_queryset(self):
-        queryset = self.queryset
-        if not queryset:
-            queryset = Invoice.objects.all().order_by('-id')
-
-        if self.request.GET.get('customer_name'):
-            queryset = queryset.filter(
-                customer__name__contains=self.request.GET.get('customer_name'))
-
-        if self.request.GET.get('customer_id'):
-            queryset = queryset.filter(
-                id=self.request.GET.get('customer_id').lstrip('0')
-            )
-
-        if self.request.GET.get('date'):
-            queryset = queryset.filter(
-                date=self.request.GET.get('date')
-            )
-
-        return queryset.order_by('-id')
-
-
-class CreateInvoiceTemplateView(TemplateView):
-    template_name = 'sales/create_invoice.html'
-
-    def get_context_data(self, **kwargs):
-        context = super(CreateInvoiceTemplateView, self).get_context_data(**kwargs)
-        context.update({
-            'customers': Customer.objects.all().order_by('name') if Customer is not None else [],
-            'products': Product.objects.all().order_by('name') if Product is not None else [],
-            'today_date': timezone.now().date(),
-            'banks': Bank.objects.all().order_by('name') if Bank is not None else []
-        })
-        return context
-
-
-class ProductListAPIView(View):
-    def get(self, request, *args, **kwargs):
-        products = Product.objects.all() if Product is not None else []
-        items = []
-
-        for product in products:
-            p = {
-                'id': product.id,
-                'name': getattr(product, 'name', str(product)),
-                'category_name': getattr(getattr(product, 'category', None), 'name', '')
-            }
-
-            # reading stock requires related names that may differ; attempt safe access
-            try:
-                stockins = product.stockin_product.all()
-            except Exception:
-                stockins = []
-
-            if stockins:
-                stock_detail = stockins.latest('id')
-                p.update({
-                    'selling_price': '%g' % getattr(stock_detail, 'price_per_item', 0),
-                    'buying_price': '%g' % getattr(stock_detail, 'buying_price_item', 0),
-                })
-
-                try:
-                    all_stock = stockins.aggregate(Sum('stock_quantity'))
-                    all_stock = float(all_stock.get('stock_quantity__sum') or 0)
-                except Exception:
-                    all_stock = 0
-
-                try:
-                    purchased_stock = product.stockout_product.all()
-                    purchased_stock = purchased_stock.aggregate(Sum('stock_out_quantity'))
-                    purchased_stock = float(purchased_stock.get('stock_out_quantity__sum') or 0)
-                except Exception:
-                    purchased_stock = 0
-
-                p.update({
-                    'stock': all_stock - purchased_stock
-                })
-
-            else:
-                p.update(
-                    {
-                        'selling_item': 0,
-                        'buying_price': 0,
-                        'stock': 0
-                    }
-                )
-
-            items.append(p)
-
-        return JsonResponse({'products': items})
-
-
-class GenerateInvoiceAPIView(View):
-    # Accept AJAX POST to create invoice + ledger entries
-    @csrf_exempt
-    def dispatch(self, request, *args, **kwargs):
-        return super(GenerateInvoiceAPIView, self).dispatch(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        # read POST data
-        data = request.POST
-        items_json = data.get('items') or '[]'
+    if request.method == 'POST':
+        # parse posted data
+        items_json = request.POST.get('items', '[]')
         try:
             items = json.loads(items_json)
         except Exception:
             items = []
 
-        # basic fields
-        customer_name = data.get('customer_name')
-        customer_phone = data.get('customer_phone')
-        customer_cnic = data.get('customer_cnic')
-        discount = data.get('discount') or 0
-        shipping = data.get('shipping') or 0
-        grand_total = data.get('grand_total') or 0
-        totalQty = data.get('totalQty') or 0
-        remaining_payment = data.get('remaining_amount') or 0
-        paid_amount = data.get('paid_amount') or 0
-        cash_payment = data.get('cash_payment') or 0
-        returned_cash = data.get('returned_cash') or 0
-        payment_type = data.get('payment_type') or 'Cash'
-        bank = data.get('bank')
+        # Basic invoice fields
+        customer_id = request.POST.get('customer_id') or None
+        payment_type = request.POST.get('payment_type') or Invoice.PAYMENT_CASH
+        bank_id = request.POST.get('bank') or None
+        discount = Decimal(request.POST.get('discount') or '0')
+        shipping = Decimal(request.POST.get('shipping') or '0')
+        paid_amount = Decimal(request.POST.get('paid_amount') or '0')
+        cash_payment = Decimal(request.POST.get('cash_payment') or '0')
+        cash_returned = Decimal(request.POST.get('returned_cash') or '0')
+        date = request.POST.get('date') or timezone.now().date()
 
+        # compute sub_total and total_quantity from items
+        sub_total = Decimal('0')
+        total_qty = Decimal('0')
+        for it in items:
+            q = Decimal(str(it.get('qty') or '0'))
+            p = Decimal(str(it.get('price') or '0'))
+            sub_total += (q * p)
+            total_qty += q
+
+        grand_total = (sub_total - discount + shipping)
+
+        # Start atomic transaction
         with transaction.atomic():
-            # create invoice via form (fallback to direct model create)
-            invoice_data = {
-                'discount': discount,
-                'grand_total': grand_total,
-                'total_quantity': totalQty,
-                'shipping': shipping,
-                'paid_amount': paid_amount,
-                'remaining_payment': remaining_payment,
-                'cash_payment': cash_payment,
-                'cash_returned': returned_cash,
-                'payment_type': payment_type,
-            }
-
-            try:
-                invoice_form = InvoiceForm(invoice_data)
-                if invoice_form.is_valid():
-                    invoice = invoice_form.save()
-                else:
-                    # fallback: create Invoice directly (best-effort)
-                    invoice = Invoice.objects.create(**{k: invoice_data.get(k) for k in invoice_data})
-            except Exception:
-                invoice = Invoice.objects.create(**{k: invoice_data.get(k) for k in invoice_data})
-
-            # handle customer: attach existing or create
             customer = None
-            if data.get('customer_id'):
+            if customer_id:
                 try:
-                    customer = Customer.objects.get(id=data.get('customer_id'))
+                    customer = Customer.objects.get(pk=int(customer_id))
                 except Exception:
                     customer = None
-            else:
-                if Customer is not None:
-                    try:
-                        customer_form = CustomerForm({
-                            'name': customer_name,
-                            'mobile': customer_phone,
-                            'cnic': customer_cnic
-                        })
-                        if hasattr(customer_form, 'is_valid') and customer_form.is_valid():
-                            customer = customer_form.save()
-                        else:
-                            # try direct create if fields exist
-                            customer = Customer.objects.create(name=customer_name) if customer_name else None
-                    except Exception:
-                        try:
-                            customer = Customer.objects.create(name=customer_name) if customer_name else None
-                        except Exception:
-                            customer = None
 
-            if customer:
-                invoice.customer = customer
-                invoice.save()
-
-            # items processing: stock out and purchased items
-            for item in items:
+            bank_obj = None
+            if bank_id:
                 try:
-                    product = Product.objects.get(id=item.get('item_id'))
+                    bank_obj = Bank.objects.get(pk=int(bank_id))
                 except Exception:
-                    product = None
+                    bank_obj = None
 
-                if product:
-                    # attempt to do stock out (if StockOutForm exists and model relations exist)
-                    try:
-                        latest_stockin = product.stockin_product.all().latest('id')
-                    except Exception:
-                        latest_stockin = None
-
-                    stock_out_kwargs = {
-                        'product': getattr(product, 'id', None),
-                        'invoice': getattr(invoice, 'id', None),
-                        'stock_out_quantity': float(item.get('qty') or 0),
-                        'buying_price': float((getattr(latest_stockin, 'buying_price_item', 0) or 0) * float(item.get('qty') or 0)),
-                        'selling_price': float((item.get('price') or 0) * float(item.get('qty') or 0)),
-                        'date': timezone.now().date()
-                    }
-
-                    try:
-                        if isinstance(StockOutForm, type) and issubclass(StockOutForm, forms.ModelForm):
-                            sof = StockOutForm(stock_out_kwargs)
-                            sof.save()
-                    except Exception:
-                        pass
-
-                    # purchased item
-                    purchased_item_kwargs = {
-                        'item': getattr(product, 'id', None),
-                        'invoice': getattr(invoice, 'id', None),
-                        'quantity': item.get('qty'),
-                        'price': item.get('price'),
-                        'purchase_amount': item.get('total'),
-                    }
-                    try:
-                        if isinstance(PurchasedItemForm, type) and issubclass(PurchasedItemForm, forms.ModelForm):
-                            pif = PurchasedItemForm(purchased_item_kwargs)
-                            pif.save()
-                    except Exception:
-                        pass
-
-            # handle installment/ledger/bank details
-            try:
-                if getattr(invoice, 'id', None):
-                    if payment_type == 'Installment':
-                        # create an installment record
-                        inst_data = {'invoice': invoice.id, 'paid_amount': paid_amount, 'description': 'Advance Payment'}
-                        try:
-                            inst_form = InvoiceInstallmentForm(inst_data)
-                            if hasattr(inst_form, 'is_valid') and inst_form.is_valid():
-                                inst_form.save()
-                            else:
-                                InvoiceInstallment.objects.create(invoice=invoice, paid_amount=paid_amount, description='Advance Payment')
-                        except Exception:
-                            InvoiceInstallment.objects.create(invoice=invoice, paid_amount=paid_amount, description='Advance Payment')
-                    elif float(remaining_payment or 0):
-                        # create customer ledger entry if form exists
-                        ledger_data = {
-                            'customer': getattr(customer, 'id', None),
-                            'invoice': invoice.id,
-                            'debit_amount': remaining_payment,
-                            'details': f'Remaining Payment for Bill/Receipt No {str(invoice.id).zfill(7)}',
-                            'date': timezone.now()
-                        }
-                        try:
-                            if hasattr(CustomerLedgerForm, 'is_valid'):
-                                clf = CustomerLedgerForm(ledger_data)
-                                if clf.is_valid():
-                                    clf.save()
-                        except Exception:
-                            pass
-
-                    if payment_type == 'Check' and bank:
-                        bank_data = {'bank': bank, 'invoice': invoice.id, 'credit': paid_amount, 'description': 'Invoice Payment is by Check/Bank.'}
-                        try:
-                            if hasattr(BankDetailForm, 'is_valid'):
-                                bdf = BankDetailForm(bank_data)
-                                bd = bdf.save()
-                                invoice.bank_details = getattr(bd, 'bank', None)
-                                invoice.save()
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-
-        return JsonResponse({'invoice_id': getattr(invoice, 'id', None)})
-
-
-class InvoiceDetailTemplateView(TemplateView):
-    template_name = 'sales/invoice_detail.html'
-
-    def get_context_data(self, **kwargs):
-        context = super(InvoiceDetailTemplateView, self).get_context_data(**kwargs)
-        invoice = Invoice.objects.get(id=self.kwargs.get('pk'))
-        context.update({
-            'invoice': invoice
-        })
-        return context
-
-
-class InvoiceInstallmentListView(ListView):
-    model = InvoiceInstallment
-    template_name = 'sales/installment_list.html'
-    paginate_by = 100
-    # ordering = '-date'  # ListView uses ordering attribute of model if set
-
-    def get_queryset(self):
-        queryset = InvoiceInstallment.objects.filter(
-            invoice=self.kwargs.get('invoice_id'))
-        return queryset
-
-    def get_context_data(self, *, object_list=None, **kwargs):
-        context = super(InvoiceInstallmentListView, self).get_context_data(**kwargs)
-
-        invoice = Invoice.objects.get(id=self.kwargs.get('invoice_id'))
-        invoice_installments = InvoiceInstallment.objects.filter(
-            invoice__id=invoice.id)
-
-        grand_total = invoice.grand_total
-
-        if invoice_installments.exists():
-            total_paid_amount = invoice_installments.aggregate(
-                Sum('paid_amount'))
-            total_paid_amount = float(
-                total_paid_amount.get('paid_amount__sum') or 0
+            invoice = Invoice.objects.create(
+                customer=customer,
+                payment_type=payment_type,
+                bank_details=bank_obj,
+                total_quantity=total_qty,
+                sub_total=sub_total,
+                discount=discount,
+                shipping=shipping,
+                grand_total=grand_total,
+                paid_amount=paid_amount,
+                remaining_payment=(grand_total - paid_amount),
+                cash_payment=cash_payment,
+                cash_returned=cash_returned,
+                date=date
             )
-        else:
-            total_paid_amount = 0
 
-        context.update({
-            'invoice_id': self.kwargs.get('invoice_id'),
-            'total_paid_amount': total_paid_amount,
-            'remaining_amount': float(grand_total or 0) - total_paid_amount
-        })
-        return context
+            # create invoice items and stockouts
+            for it in items:
+                item_id = it.get('item_id')
+                qty = Decimal(str(it.get('qty') or '0'))
+                price = Decimal(str(it.get('price') or '0'))
+                total = qty * price
+                if not item_id:
+                    continue
+                product = Product.objects.get(pk=int(item_id))
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    item=product,
+                    quantity=qty,
+                    price=price,
+                    total=total
+                )
+                # Create a StockOut entry and decrement product.stock
+                try:
+                    StockOut.objects.create(
+                        product=product,
+                        stock_out_quantity=int(qty),
+                        invoice=invoice,
+                        date=date
+                    )
+                    # decrement product.stock if field exists
+                    if hasattr(product, 'stock'):
+                        product.stock = max(0, int(product.stock or 0) - int(qty))
+                        product.save(update_fields=['stock'])
+                except Exception:
+                    # if StockOut model or product.stock not present, ignore but log via messages
+                    pass
+
+            # If Installment and some paid amount, create installment record
+            if payment_type == Invoice.PAYMENT_INSTALLMENT and paid_amount > 0:
+                InvoiceInstallment.objects.create(
+                    invoice=invoice,
+                    paid_amount=paid_amount,
+                    description='Advance Payment',
+                    date=date
+                )
+
+        messages.success(request, f"Invoice {str(invoice)} created successfully.")
+        return redirect('sales:invoice_detail', pk=invoice.pk)
+
+    # GET - render form
+    products = Product.objects.all().order_by('name')
+    customers = Customer.objects.all().order_by('name')
+    banks = Bank.objects.all().order_by('name')
+    invoice_form = InvoiceForm(initial={'date': timezone.now().date()})
+
+    return render(request, 'sales/create_invoice.html', {
+        'products': products,
+        'customers': customers,
+        'banks': banks,
+        'invoice_form': invoice_form,
+        'today_date': timezone.now().date()
+    })
 
 
-class InvoiceInstallmentFormView(FormView):
-    form_class = InvoiceInstallmentForm
-    template_name = 'sales/installment_add.html'
+def invoice_list(request):
+    qs = Invoice.objects.select_related('customer').all().order_by('-date', '-id')
+    # Filters
+    q_name = request.GET.get('q_name')
+    q_invoice = request.GET.get('q_invoice')
+    q_date = request.GET.get('q_date')
 
-    def form_valid(self, form):
-        form.save()
-        return HttpResponseRedirect(
-            reverse('sales:installment_list',
-                    kwargs={'invoice_id': self.kwargs.get('invoice_id')}))
+    if q_name:
+        qs = qs.filter(customer__name__icontains=q_name)
+    if q_invoice:
+        qs = qs.filter(id=int(q_invoice.lstrip('0') or 0))
+    if q_date:
+        qs = qs.filter(date=q_date)
 
-    def form_invalid(self, form):
-        return super(InvoiceInstallmentFormView, self).form_invalid(form)
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page')
+    invoices = paginator.get_page(page)
 
-    def get_context_data(self, **kwargs):
-        context = super(InvoiceInstallmentFormView, self).get_context_data(**kwargs)
-        context.update({
-            'invoice': Invoice.objects.get(id=self.kwargs.get('invoice_id'))
-        })
-        return context
+    return render(request, 'sales/invoice_list.html', {
+        'invoices': invoices
+    })
 
 
-class InvoiceInstallmentDeleteView(DeleteView):
-    model = InvoiceInstallment
-    success_message = ''
+def invoice_detail(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+    items = invoice.invoice_items.select_related('item').all()
+    return render(request, 'sales/invoice_detail.html', {
+        'invoice': invoice,
+        'items': items
+    })
 
-    def __init__(self, *args, **kwargs):
-        super(InvoiceInstallmentDeleteView, self).__init__(*args, **kwargs)
-        self.invoice_id = None
 
-    def dispatch(self, request, *args, **kwargs):
-        installment = InvoiceInstallment.objects.get(id=self.kwargs.get('pk'))
-        self.invoice_id = installment.invoice.id
+# Installments
+def installment_list(request, invoice_id):
+    invoice = get_object_or_404(Invoice, pk=invoice_id)
+    installments = invoice.invoice_installment.all().order_by('-date', '-id')
+    return render(request, 'sales/installment_list.html', {
+        'invoice': invoice,
+        'installments': installments
+    })
 
-        return super(
-            InvoiceInstallmentDeleteView, self).dispatch(request, *args, **kwargs)
 
-    def get_success_url(self):
-        return reverse(
-            'sales:installment_list', kwargs={'invoice_id': self.invoice_id})
+def installment_add(request, invoice_id):
+    invoice = get_object_or_404(Invoice, pk=invoice_id)
+    if request.method == 'POST':
+        form = InvoiceInstallmentForm(request.POST)
+        if form.is_valid():
+            inst = form.save(commit=False)
+            inst.invoice = invoice
+            inst.save()
+            messages.success(request, "Installment added.")
+            return redirect('sales:installment_list', invoice_id=invoice.id)
+    else:
+        form = InvoiceInstallmentForm(initial={'date': timezone.now().date()})
+    return render(request, 'sales/installment_add.html', {
+        'invoice': invoice,
+        'form': form
+    })
 
-    def get(self, request, *args, **kwargs):
-        return self.post(request, *args, **kwargs)
+
+
+
+
+
+
+
+# from django.shortcuts import render, redirect, get_object_or_404
+# from django.contrib import messages
+# from django.contrib.auth.decorators import login_required
+# from django.db import transaction
+# from django.http import JsonResponse, HttpResponseBadRequest
+
+# import json # Needed for parsing dynamic item data
+
+# from .forms import InvoiceForm # InvoiceItemForm not strictly needed here for processing
+# from .models import Invoice, InvoiceItem, INVOICE_STATUS_CHOICES
+# from products.models import Product, StockOut # Assuming StockOut is imported here
+# # Assuming these models exist:
+# from customers.models import Customer
+# from banking.models import BankAccount
+
+# # Helper function to calculate final totals based on items, discount, and shipping
+# def calculate_invoice_totals(items_list, discount_amount, shipping_charge):
+#     """Calculates subtotal and grand total based on line items."""
+#     line_subtotal = sum(item['quantity'] * item['unit_price'] for item in items_list)
     
+#     # Ensure discount and shipping are decimal fields
+#     discount_amount = discount_amount if discount_amount is not None else 0.00
+#     shipping_charge = shipping_charge if shipping_charge is not None else 0.00
     
-
-# from django.shortcuts import render
-
-# # Create your views here.
-# from django.shortcuts import render, get_object_or_404
-# from .models import Invoice
-
-# def print_invoice(request, pk):
-#     invoice = get_object_or_404(Invoice, pk=pk)
-#     return render(request, 'sales/print_invoice.html', {'invoice': invoice})
+#     grand_total = line_subtotal - discount_amount + shipping_charge
+    
+#     return line_subtotal, grand_total
 
 
+# @login_required
+# def sales_dashboard(request):
+#     """Placeholder for the Sales Dashboard view."""
+#     # ... (Keep existing dashboard, list, detail, print, installment placeholders) ...
+#     # This is placeholder, will be implemented in a later step (Goal #4)
+#     return render(request, 'sales/dashboard.html', {'title': 'Sales Dashboard'})
 
-# def index(request):
-#     return render(request, 'sales/index.html')
+# @login_required
+# def invoice_list(request):
+#     """Placeholder for the Invoice List view."""
+#     # ... (Keep existing placeholder) ...
+#     return render(request, 'sales/invoice_list.html', {'title': 'Invoices List'})
+
+# @login_required
+# def invoice_detail(request, invoice_id):
+#     """Placeholder for the Invoice Detail view."""
+#     # ... (Keep existing placeholder) ...
+#     invoice = get_object_or_404(Invoice, pk=invoice_id)
+#     return render(request, 'sales/invoice_detail.html', {'title': f'Invoice #{invoice.id}', 'invoice': invoice})
+
+# @login_required
+# def invoice_print(request, invoice_id):
+#     """Placeholder for the Printable Invoice view."""
+#     # ... (Keep existing placeholder) ...
+#     invoice = get_object_or_404(Invoice, pk=invoice_id)
+#     return render(request, 'sales/invoice_print.html', {'title': f'Print Invoice #{invoice.id}', 'invoice': invoice})
+
+# @login_required
+# def invoice_installments(request, invoice_id):
+#     """Placeholder for Installments List for an Invoice."""
+#     # ... (Keep existing placeholder) ...
+#     invoice = get_object_or_404(Invoice, pk=invoice_id)
+#     return render(request, 'sales/invoice_installments.html', {'title': f'Installments for Invoice #{invoice.id}', 'invoice': invoice})
+
+# @login_required
+# def add_installment(request, invoice_id):
+#     """Placeholder for adding a new Installment."""
+#     # ... (Keep existing placeholder) ...
+#     invoice = get_object_or_404(Invoice, pk=invoice_id)
+#     return render(request, 'sales/add_installment.html', {'title': f'Add Installment to Invoice #{invoice.id}', 'invoice': invoice})
+
+
+# @login_required
+# @transaction.atomic
+# def create_invoice(request):
+#     """
+#     Handles the POS-style form submission for creating a new Invoice, 
+#     InvoiceItems, and corresponding StockOut records.
+#     """
+#     if request.method == 'POST':
+#         # 1. Initialize Forms and Data
+#         form = InvoiceForm(request.POST)
+        
+#         # Get line item data (expected to be a JSON string from frontend JS)
+#         try:
+#             items_data = json.loads(request.POST.get('items_data', '[]'))
+#         except json.JSONDecodeError:
+#             messages.error(request, "Error processing item data. Please ensure items are correctly formatted.")
+#             return redirect('sales:create_invoice')
+
+#         # Get financial values from the hidden/calculated fields passed by the frontend
+#         try:
+#             grand_total = float(request.POST.get('grand_total', 0.00))
+#             amount_paid = float(request.POST.get('amount_paid', 0.00))
+#             discount_amount = float(request.POST.get('discount_amount', 0.00))
+#             shipping_charge = float(request.POST.get('shipping_charge', 0.00))
+            
+#             # Remaining balance should be calculated: Grand Total - Amount Paid
+#             remaining_balance = grand_total - amount_paid
+#         except ValueError:
+#              messages.error(request, "Invalid financial values submitted.")
+#              return redirect('sales:create_invoice')
+
+
+#         # 2. Validate Items and Check Stock
+        
+#         # Check if there are any items
+#         if not items_data:
+#             messages.error(request, "Invoice must contain at least one item.")
+#             return redirect('sales:create_invoice')
+
+#         # Check stock and aggregate items
+#         processed_items = []
+#         products_to_update = {} # {product_id: Product object}
+        
+#         for item in items_data:
+#             product_id = item.get('product_id')
+#             quantity = int(item.get('quantity', 0))
+#             unit_price = float(item.get('unit_price', 0.00))
+            
+#             if quantity <= 0:
+#                 continue
+
+#             try:
+#                 # Use select_for_update for thread safety during stock check/update
+#                 product = Product.objects.select_for_update().get(pk=product_id)
+#             except Product.DoesNotExist:
+#                 messages.error(request, f"Product ID {product_id} not found.")
+#                 return redirect('sales:create_invoice')
+            
+#             # CRITICAL SAFETY CHECK: Use product.stock field
+#             if product.stock < quantity:
+#                 messages.error(request, f"Insufficient stock for {product.name}. Available: {product.stock}, Requested: {quantity}.")
+#                 # The transaction will automatically roll back
+#                 return redirect('sales:create_invoice')
+            
+#             processed_items.append({
+#                 'product': product,
+#                 'quantity': quantity,
+#                 'unit_price': unit_price,
+#                 'subtotal': quantity * unit_price
+#             })
+#             products_to_update[product.id] = product # Collect product object
+
+
+#         # 3. Final Form Validation and Save
+#         if form.is_valid():
+#             invoice = form.save(commit=False)
+            
+#             # Recalculate totals one last time on the backend for security and accuracy
+#             calculated_subtotal, calculated_grand_total = calculate_invoice_totals(
+#                 [{'quantity': item['quantity'], 'unit_price': item['unit_price']} for item in processed_items],
+#                 invoice.discount_amount,
+#                 invoice.shipping_charge
+#             )
+            
+#             # Assign final calculated values
+#             invoice.subtotal = calculated_subtotal
+#             invoice.grand_total = calculated_grand_total
+#             invoice.amount_paid = amount_paid # User-submitted payment
+#             invoice.remaining_balance = calculated_grand_total - amount_paid
+#             invoice.created_by = request.user
+            
+#             # Determine status
+#             if invoice.remaining_balance <= 0.00:
+#                 invoice.status = 'Paid'
+#             elif invoice.payment_type == 'Installment' and invoice.remaining_balance > 0.00:
+#                 invoice.status = 'Confirmed'
+#             else:
+#                 invoice.status = 'Confirmed'
+
+#             invoice.save()
+            
+#             # 4. Create Invoice Items and StockOut records
+#             for item in processed_items:
+#                 # Create InvoiceItem
+#                 InvoiceItem.objects.create(
+#                     invoice=invoice,
+#                     product=item['product'],
+#                     quantity=item['quantity'],
+#                     unit_price=item['unit_price'],
+#                     # subtotal calculated in model's save()
+#                 )
+                
+#                 # Create StockOut Record (Linking StockOut to the Invoice for traceability)
+#                 # --- CORRECTED FIELD NAMES TO MATCH YOUR MODEL ---
+#                 StockOut.objects.create(
+#                     product=item['product'],
+#                     stock_out_quantity=item['quantity'], # Using your field name
+#                     invoice=invoice, # Using your field name
+#                 )
+
+#                 # Update Product Stock (Atomic update)
+#                 item['product'].stock -= item['quantity']
+#                 item['product'].save(update_fields=['stock'])
+
+#             # 5. Handle Initial Payment Integration (Cash/Check) - Follow-up step
+            
+#             messages.success(request, f"Invoice #{invoice.id} created successfully! Total: {invoice.grand_total}")
+#             return redirect('sales:invoice_detail', invoice_id=invoice.id)
+        
+#         else:
+#             # Form is invalid
+#             messages.error(request, "Invoice submission failed. Please check the form errors.")
+#             # Fall through to render the form with errors
+
+#     else:
+#         # GET request
+#         form = InvoiceForm(initial={
+#             'discount_amount': 0,
+#             'shipping_charge': 0,
+#             'amount_paid': 0,
+#             'payment_type': 'Cash'
+#         })
+        
+#     # Re-fetch item form for rendering the POS input row
+#     item_form = InvoiceItemForm()
+    
+#     context = {
+#         'title': 'Create New Invoice (POS)',
+#         'invoice_form': form,
+#         'item_form': item_form,
+#         'customers': Customer.objects.all(), # Pass customers for dropdown
+#         'products': Product.objects.all(), # Pass products for JS data
+#         'banks': BankAccount.objects.all(), # Pass banks for dropdown
+#     }
+#     return render(request, 'sales/create_invoice.html', context)

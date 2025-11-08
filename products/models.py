@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.db.models import Sum
 from django.db.models import F
 # Create your models here.
     
@@ -18,13 +19,16 @@ class Product(models.Model):
     stock = models.IntegerField(default=0)
     quantity = models.IntegerField(default=0)
     buying_price = models.DecimalField(max_digits=10, decimal_places=2)
-    # selling_price = models.DecimalField(max_digits=10, decimal_places=2)
-    # company = models.CharField(max_length=200, blank=True)
-    # barcode = models.CharField(max_length=100, blank=True)
+   
     date = models.DateField(default=timezone.now, null=True, blank=True)
 
     def __str__(self):
         return self.name
+    
+    def available_stock(self):
+        stockin_total = self.stockin_product.aggregate(Sum('stock_quantity'))['stock_quantity__sum'] or 0
+        stockout_total = self.stockout_product.aggregate(Sum('stock_out_quantity'))['stock_out_quantity__sum'] or 0
+        return stockin_total - stockout_total
 
 
 
@@ -94,3 +98,5 @@ class StockOut(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - {self.stock_out_quantity}"
+    
+    

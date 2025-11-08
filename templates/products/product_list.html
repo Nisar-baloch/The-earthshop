@@ -40,7 +40,8 @@
 
           <td class="text-right">{{ p.buying_price|default:"-" }}</td>
           <td class="text-right">{{ p.stock|default:"0" }}</td>
-          <td class="text-right">{{ p.stock|default:"0" }}</td>
+          <td class="text-right">{{ p.available_stock }}</td>
+
           <td>{{ p.date|date:"Y-m-d" }}</td>
           <td class="text-right">
             
@@ -53,6 +54,8 @@
 
   <!-- Manual Add StockOut form still OK -->
 <a href="{% url 'products:product_stockouts' p.id %}" class="btn btn-xs btn-error">Stock Out</a>
+
+
 
 </div>
           </td>

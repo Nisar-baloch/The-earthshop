@@ -4,6 +4,7 @@ from django.contrib import messages
 from .forms import CategoryForm, ProductForm, StockInForm, StockOutForm 
 from .models import Product, Category, StockIn, StockOut
 from django.utils import timezone
+from .forms import StockOutForm
 
 
 
@@ -59,13 +60,28 @@ def delete_product(request, pk):
         product.delete()
         return redirect('products:product_list')
     return render(request, 'products/delete_product.html', {'product': product})
-# products/views.py (paste/replace the functions below)
+
+
+
+
+def product_stockins(request, product_id):
+    """
+    Show the product-specific StockIn list (newest first).
+    URL: /products/product/<product_id>/stockin/
+    """
+    product = get_object_or_404(Product, pk=product_id)
+    stockins = StockIn.objects.filter(product=product).order_by('-date', '-id')
+    return render(request, 'products/stockin_list.html', {
+        'product': product,
+        'stockins': stockins,
+        'product_specific': True,
+    })
+
 
 def add_stock(request):
     """
-    Manual add-stock form only.
-    If GET has ?product=ID, prefill the product select and show read-only product_display.
-    After POST, redirect to product-specific stockin list so user sees the new entry at top.
+    Manual add-stock form. If ?product=ID provided, form is prefilled.
+    After POST, redirect to the product-specific stockin list.
     """
     product_id = request.GET.get('product') or request.POST.get('product')
     product = None
@@ -74,11 +90,6 @@ def add_stock(request):
     if product_id:
         product = get_object_or_404(Product, pk=product_id)
         initial['product'] = product.id
-        # attempt to use product fields as defaults (if present)
-        if hasattr(product, 'buying_price'):
-            initial['buying_price_item'] = product.buying_price
-        if hasattr(product, 'selling_price'):
-            initial['selling_price_item'] = product.selling_price
 
     if request.method == 'POST':
         form = StockInForm(request.POST)
@@ -91,7 +102,6 @@ def add_stock(request):
 
     product_display = None
     if product:
-        # Some projects store category name in different attribute — try .name then .category
         catname = getattr(product.category, 'name', getattr(product.category, 'category', ''))
         product_display = f"{product.name} | {catname}" if catname else f"{product.name}"
 
@@ -102,66 +112,52 @@ def add_stock(request):
     })
 
 
-
-
-
-# Product-specific StockOut list
-def product_stockouts(request, pk):
-    product = get_object_or_404(Product, pk=pk)
-    stockouts = StockOut.objects.filter(product=product).order_by('-id')
+def product_stockouts(request, product_id):
+    """
+    Show the product-specific StockOut list (newest first).
+    URL: /products/product/<product_id>/stockout/
+    """
+    product = get_object_or_404(Product, pk=product_id)
+    stockouts = StockOut.objects.filter(product=product).order_by('-date', '-id')
     return render(request, 'products/stockout_list.html', {
         'product': product,
         'stockouts': stockouts,
-        'product_specific': True
+        'product_specific': True,
     })
 
 
-# Add StockOut manually
-def add_stock_out(request, pk):
-    product = get_object_or_404(Product, pk=pk)
+def add_stock_out(request, product_id):
+    """
+    Manual add-stockout form for a product.
+    After POST, redirect to the product-specific stockout list.
+    """
+    product = get_object_or_404(Product, pk=product_id)
 
     if request.method == 'POST':
+        # Bind form with POST data
         form = StockOutForm(request.POST)
         if form.is_valid():
+            # Create stockout but attach the correct product
             stockout = form.save(commit=False)
             stockout.product = product
             stockout.save()
-            return redirect('products:product_stockouts', pk=product.pk)
+            messages.success(request, "Stock out recorded successfully.")
+            # ✅ Redirect to product-specific stockout list
+            return redirect('products:product_stockouts', product_id=product.id)
+        else:
+            messages.error(request, "Please correct the errors below.")
     else:
+        # Prefill with today's date
         form = StockOutForm(initial={
-            'product': product,
             'date': timezone.now().date()
         })
 
     return render(request, 'products/add_stockout.html', {
         'form': form,
-        'product': product
-    })
-
-
-
-def available_stock(self):
-    stockin_total = self.stockin_product.aggregate(Sum('stock_quantity'))['stock_quantity__sum'] or 0
-    stockout_total = self.stockout_product.aggregate(Sum('stock_out_quantity'))['stock_out_quantity__sum'] or 0
-    return stockin_total - stockout_total
-
-# STOCKIN - product-specific list (NEW)
-# -------------------------
-def product_stockins(request, product_id):
-    """
-    Show only stock-ins for a single product.
-    Newest first: order by -date, -id so newest rows appear at top.
-    """
-    product = get_object_or_404(Product, pk=product_id)
-    stockins = StockIn.objects.filter(product=product).order_by('-date', '-id')
-    return render(request, 'products/stockin_list.html', {
         'product': product,
-        'stockins': stockins,
-        'product_specific': True,
     })
+# --- end block ---
 
-
-    
 # List all stockins
 def stockin_list(request):
     stockins = StockIn.objects.select_related('product', 'product__category').all().order_by('-date', '-id')

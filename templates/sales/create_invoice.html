@@ -1,229 +1,176 @@
-{% extends "base.html" %}
-{% block title %}Create Invoice{% endblock %}
-{% block page_title %}Create Invoice{% endblock %}
-
+{% extends 'base.html' %}
+{% load static %}
 {% block content %}
-<div class="grid grid-cols-12 gap-6">
-  <!-- LEFT: items -->
-  <div class="col-span-12 lg:col-span-7">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body">
-        <div class="overflow-x-auto">
-          <table id="items-table" class="table w-full table-compact">
-            <thead>
+<div class="container-fluid mt-4">
+  <div class="card shadow p-4">
+    <h3 class="text-center mb-4">Create Invoice</h3>
+    <form id="invoiceForm" method="POST">
+      {% csrf_token %}
+      <div class="row g-4">
+        <!-- ================= LEFT SIDE ================= -->
+        <div class="col-lg-8">
+          <table class="table table-bordered table-sm align-middle" id="invoiceItemsTable">
+            <thead class="table-light">
               <tr>
-                <th class="w-8"></th>
                 <th>Item</th>
-                <th class="w-28 text-right">Stock</th>
-                <th class="w-28 text-right">Price</th>
-                <th class="w-28 text-right">Quantity</th>
-                <th class="w-28 text-right">Total</th>
+                <th>Stock</th>
+                <th>Price</th>
+                <th>Qty</th>
+                <th>Total</th>
+                <th>Action</th>
               </tr>
             </thead>
-            <tbody id="items-body">
-              <!-- Template row (first empty row) -->
-              <tr class="item-row">
-                <td class="text-center">
-                  <button type="button" class="btn btn-xs btn-ghost remove-row" title="Remove">✕</button>
-                </td>
+            <tbody id="itemRows">
+              <tr>
                 <td>
-                  <input type="text" name="item_name" class="input input-bordered w-full item-name" placeholder="Search / type product">
+                  <select name="product" class="form-select form-select-sm productSelect">
+                    <option value="">Select Item</option>
+                    {% for product in products %}
+                    <option value="{{ product.id }}" data-price="{{ product.price }}" data-stock="{{ product.stock }}">
+                      {{ product.name }}
+                    </option>
+                    {% endfor %}
+                  </select>
                 </td>
-                <td class="text-right">
-                  <span class="stock-val">-</span>
-                </td>
-                <td class="text-right">
-                  <input type="number" min="0" step="0.01" class="input input-bordered w-24 text-right item-price" value="0">
-                </td>
-                <td class="text-right">
-                  <input type="number" min="0" step="1" class="input input-bordered w-24 text-right item-qty" value="1">
-                </td>
-                <td class="text-right">
-                  <span class="item-total">0.00</span>
-                </td>
+                <td><input type="number" class="form-control form-control-sm stockField" readonly></td>
+                <td><input type="number" class="form-control form-control-sm priceField" value="0"></td>
+                <td><input type="number" class="form-control form-control-sm qtyField" value="1" min="1"></td>
+                <td><input type="number" class="form-control form-control-sm totalField" value="0" readonly></td>
+                <td><button type="button" class="btn btn-danger btn-sm removeItem">X</button></td>
               </tr>
             </tbody>
           </table>
+          <button type="button" class="btn btn-primary btn-sm" id="addItemBtn">Add Item</button>
         </div>
 
-        <div class="pt-4">
-          <button id="add-item-btn" type="button" class="btn btn-sm btn-primary">Add Item</button>
+        <!-- ================= RIGHT SIDE ================= -->
+        <div class="col-lg-4">
+          <div class="card p-3 border">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Billed To:</label>
+              <select id="customerSelect" name="customer" class="form-select form-select-sm">
+                <option value="">Select Customer</option>
+                {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+              <a href="#" id="newCustomerLink" class="text-primary small">New Customer</a>
+
+              <div id="newCustomerFields" class="mt-2" style="display:none;">
+                <input type="text" name="new_customer_name" class="form-control form-control-sm mb-1" placeholder="Name">
+                <input type="text" name="new_customer_phone" class="form-control form-control-sm mb-1" placeholder="Phone">
+                <input type="text" name="new_customer_address" class="form-control form-control-sm" placeholder="Address">
+                                 <a class="added-customer" style="cursor: pointer;">Existing Customer</a><br><br>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">Payment Type:</label>
+              <select id="paymentType" name="payment_type" class="form-select form-select-sm">
+                <option value="Cash">Cash</option>
+                <option value="Check">Check</option>
+                <option value="Installment">Installment</option>
+              </select>
+            </div>
+
+            <div id="bankSelectDiv" class="mb-3" style="display:none;">
+              <label class="form-label fw-bold">Bank:</label>
+              <select name="bank" class="form-select form-select-sm">
+                {% for b in banks %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="border-top pt-2">
+              <p class="mb-1"><strong>Total Qty:</strong> <span id="totalQty">0</span></p>
+              <p class="mb-1"><strong>Grand Total:</strong> <span id="grandTotal">0.00</span></p>
+            </div>
+
+            <div class="border-top pt-2">
+              <label>Discount</label>
+              <input type="number" step="0.01" name="discount" class="form-control form-control-sm mb-1" value="0">
+              <label>Shipping</label>
+              <input type="number" step="0.01" name="shipping" class="form-control form-control-sm mb-1" value="0">
+              <label>Paid Amount</label>
+              <input type="number" step="0.01" name="paid_amount" class="form-control form-control-sm mb-1" value="0">
+            </div>
+
+            <div class="text-center mt-3">
+              <button type="submit" class="btn btn-success w-100">Create Invoice</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- RIGHT: billing & ledger -->
-  <div class="col-span-12 lg:col-span-5">
-    <div class="card bg-base-100 shadow">
-      <div class="card-body space-y-3">
-        <div class="flex items-center justify-between">
-          <h3 class="font-semibold">Billed To: <span id="invoice-date" class="font-normal">{{ today_date|default:today_date }}</span></h3>
-          <select id="payment_type" class="select select-bordered w-40">
-            <option value="Cash">Cash</option>
-            <option value="Installment">Installment</option>
-            <option value="Check">Check</option>
-          </select>
-        </div>
-
-        <!-- Customer search / add -->
-        <div>
-          <input id="customer-input" type="text" class="input input-bordered w-full" placeholder="Search customer or type new">
-          <a id="new-customer-link" class="link text-primary mt-2 inline-block">New Customer</a>
-        </div>
-
-        <!-- totals -->
-        <div class="grid grid-cols-2 gap-2 border rounded-box p-3 mt-2">
-          <div>
-            <div class="text-sm text-slate-500">Total Qty</div>
-            <div class="font-semibold text-red-600" id="display-total-qty">0</div>
-          </div>
-          <div class="text-right">
-            <div class="text-sm text-slate-500">Grand Total</div>
-            <div class="font-semibold text-red-600" id="display-grand-total">0.00</div>
-          </div>
-        </div>
-
-        <!-- Ledger -->
-        <div class="mt-2 border rounded-box p-3">
-          <h4 class="font-semibold text-center">Customer Ledger</h4>
-          <div class="grid grid-cols-2 gap-2 items-center py-2">
-            <div class="text-sm text-slate-600">Received Amount</div>
-            <input id="received-amount" type="number" step="0.01" class="input input-bordered w-full" value="0">
-            <div class="text-sm text-slate-600">Remaining Amount</div>
-            <div class="text-right" id="remaining-amount">0.00</div>
-          </div>
-        </div>
-
-        <!-- Cash calculator -->
-        <div class="mt-2 border rounded-box p-3">
-          <h4 class="font-semibold text-center">Cash Calculator</h4>
-          <div class="grid grid-cols-2 gap-2 items-center py-2">
-            <div class="text-sm text-slate-600">Cash Payment</div>
-            <input id="cash-payment" type="number" step="0.01" class="input input-bordered w-full" value="0">
-            <div class="text-sm text-slate-600">Returned Cash</div>
-            <div class="text-right" id="returned-cash">0.00</div>
-          </div>
-        </div>
-
-        <div class="mt-4">
-          <button id="create-invoice-btn" class="btn btn-block btn-success">Create Invoice</button>
-        </div>
-
-      </div>
-    </div>
+    </form>
   </div>
 </div>
 
-<!-- JS: item handling & simple calculations -->
+<!-- =============== JS =============== -->
 <script>
-(function(){
-  // helper: format number
-  const fmt = v => Number(v||0).toFixed(2);
+document.addEventListener("DOMContentLoaded", function(){
 
-  const itemsBody = document.getElementById('items-body');
-  const addBtn = document.getElementById('add-item-btn');
-  const totalQtyEl = document.getElementById('display-total-qty');
-  const grandTotalEl = document.getElementById('display-grand-total');
-  const receivedInput = document.getElementById('received-amount');
-  const remainingEl = document.getElementById('remaining-amount');
-  const cashInput = document.getElementById('cash-payment');
-  const returnedEl = document.getElementById('returned-cash');
-
-  function recalcRow(row){
-    const price = parseFloat(row.querySelector('.item-price').value || 0);
-    const qty = parseFloat(row.querySelector('.item-qty').value || 0);
-    const total = price * qty;
-    row.querySelector('.item-total').textContent = fmt(total);
-    return {qty, total};
-  }
-
-  function recalcAll(){
-    let sumQty = 0, sumTotal = 0;
-    document.querySelectorAll('#items-body .item-row').forEach(row=>{
-      const r = recalcRow(row);
-      sumQty += r.qty;
-      sumTotal += r.total;
-    });
-    totalQtyEl.textContent = fmt(sumQty);
-    grandTotalEl.textContent = fmt(sumTotal);
-
-    // remaining = grandTotal - received
-    const received = parseFloat(receivedInput.value||0);
-    const remaining = sumTotal - received;
-    remainingEl.textContent = fmt(remaining>0?remaining:0);
-    // returned cash = received - grandTotal (if overpaid)
-    returnedEl.textContent = fmt(received - sumTotal > 0 ? (received - sumTotal) : 0);
-  }
-
-  // attach events on a row
-  function attachRowEvents(row){
-    row.querySelectorAll('.item-price, .item-qty').forEach(el=>{
-      el.addEventListener('input', ()=> recalcAll());
-    });
-    const removeBtn = row.querySelector('.remove-row');
-    removeBtn.addEventListener('click', ()=> {
-      row.remove();
-      recalcAll();
-    });
-  }
-
-  // initial row
-  document.querySelectorAll('#items-body .item-row').forEach(attachRowEvents);
-
-  addBtn.addEventListener('click', ()=>{
-    const template = document.querySelector('#items-body .item-row').cloneNode(true);
-    // clear inputs
-    template.querySelectorAll('input').forEach(i=>{
-      if(i.classList.contains('item-qty')) i.value = 1;
-      else i.value = '';
-    });
-    template.querySelector('.stock-val').textContent = '-';
-    template.querySelector('.item-total').textContent = '0.00';
-    itemsBody.appendChild(template);
-    attachRowEvents(template);
-    recalcAll();
+  // Toggle New Customer Fields
+  document.getElementById("newCustomerLink").addEventListener("click", function(e){
+    e.preventDefault();
+    document.getElementById("newCustomerFields").style.display = "block";
   });
 
-  receivedInput.addEventListener('input', recalcAll);
-  cashInput.addEventListener('input', recalcAll);
-
-  // create invoice: attempt to POST to API if available, else fallback to form submit
-  document.getElementById('create-invoice-btn').addEventListener('click', function(){
-    const rows = Array.from(document.querySelectorAll('#items-body .item-row'));
-    const items = rows.map(r => ({
-      name: r.querySelector('.item-name').value || '',
-      price: parseFloat(r.querySelector('.item-price').value || 0),
-      qty: parseFloat(r.querySelector('.item-qty').value || 0),
-      total: parseFloat(r.querySelector('.item-total').textContent || 0)
-    }));
-    const payload = {
-      items: JSON.stringify(items),
-      sub_total: grandTotalEl.textContent,
-      grand_total: grandTotalEl.textContent,
-      totalQty: totalQtyEl.textContent,
-      paid_amount: receivedInput.value || 0,
-      remaining_amount: remainingEl.textContent || 0,
-      cash_payment: cashInput.value || 0,
-      payment_type: document.getElementById('payment_type').value || 'Cash'
-    };
-
- 
-      body: new URLSearchParams(payload)
-    }).then(r=>r.json()).then(data=>{
-      if(data && data.invoice_id){
-        // redirect to invoice detail if route exists
-        window.location.href = "{% url 'sales:invoice_detail' 0 %}".replace('/0/', '/'+data.invoice_id+'/');
-      } else {
-        alert('Invoice created (no id returned).');
-      }
-    }).catch(err=>{
-      console.warn('API error:', err);
-      alert('Unable to call API. If you want a server form submit instead, implement POST handling.');
-    });
-
+  // Show/Hide Bank Selector
+  document.getElementById("paymentType").addEventListener("change", function(){
+    document.getElementById("bankSelectDiv").style.display = (this.value === "Check") ? "block" : "none";
   });
 
-})();
+  // Add Item Row
+  document.getElementById("addItemBtn").addEventListener("click", function(){
+    let newRow = document.querySelector("#itemRows tr").cloneNode(true);
+    newRow.querySelectorAll("input").forEach(i => i.value = "");
+    document.getElementById("itemRows").appendChild(newRow);
+  });
+
+  // Remove Item Row
+  document.addEventListener("click", function(e){
+    if (e.target.classList.contains("removeItem")){
+      e.target.closest("tr").remove();
+      calculateTotals();
+    }
+  });
+
+  // Update stock and price when product changes
+  document.addEventListener("change", function(e){
+    if (e.target.classList.contains("productSelect")){
+      let option = e.target.options[e.target.selectedIndex];
+      let stock = option.dataset.stock || 0;
+      let price = option.dataset.price || 0;
+      let row = e.target.closest("tr");
+      row.querySelector(".stockField").value = stock;
+      row.querySelector(".priceField").value = price;
+      calculateTotals();
+    }
+  });
+
+  // Update totals when qty or price changes
+  document.addEventListener("input", function(e){
+    if (e.target.classList.contains("qtyField") || e.target.classList.contains("priceField")){
+      calculateTotals();
+    }
+  });
+
+  function calculateTotals(){
+    let rows = document.querySelectorAll("#itemRows tr");
+    let totalQty = 0, grandTotal = 0;
+    rows.forEach(r=>{
+      let qty = parseFloat(r.querySelector(".qtyField").value) || 0;
+      let price = parseFloat(r.querySelector(".priceField").value) || 0;
+      let total = qty * price;
+      r.querySelector(".totalField").value = total.toFixed(2);
+      totalQty += qty;
+      grandTotal += total;
+    });
+    document.getElementById("totalQty").textContent = totalQty.toFixed(0);
+    document.getElementById("grandTotal").textContent = grandTotal.toFixed(2);
+  }
+
+});
 </script>
 {% endblock %}

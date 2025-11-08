@@ -1,17 +1,17 @@
-
+# sales/urls.py
 from django.urls import path
 from . import views
 
 app_name = 'sales'
 
 urlpatterns = [
-    path('', views.InvoiceListView.as_view(), name='invoice_list'),
-    path('create/', views.CreateInvoiceTemplateView.as_view(), name='create_invoice'),
-    path('<int:pk>/detail/', views.InvoiceDetailTemplateView.as_view(), name='invoice_detail'),
+    path('create/', views.create_invoice, name='create_invoice'),
+    path('list/', views.invoice_list, name='invoice_list'),
+    path('detail/<int:pk>/', views.invoice_detail, name='invoice_detail'),
 
-    # Installment URLs
-    path('<int:invoice_id>/installments/', views.InvoiceInstallmentListView.as_view(), name='installment_list'),
-    path('<int:invoice_id>/installments/add/', views.InvoiceInstallmentFormView.as_view(), name='installment_add'),
-    path('installments/<int:pk>/delete/', views.InvoiceInstallmentDeleteView.as_view(), name='installment_delete'),
-
+    # installments
+    path('installments/<int:invoice_id>/', views.installment_list, name='installment_list'),
+    path('installments/<int:invoice_id>/add/', views.installment_add, name='installment_add'),
 ]
+
+

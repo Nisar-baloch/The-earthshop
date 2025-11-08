@@ -51,9 +51,8 @@ class StockInForm(forms.ModelForm):
 class StockOutForm(forms.ModelForm):
     class Meta:
         model = StockOut
-        fields = ['product', 'stock_out_quantity', 'date']
+        fields = ['stock_out_quantity', 'date']
         widgets = {
-            'product': forms.Select(attrs={'class': 'select select-bordered w-full'}),
-            'stock_out_quantity': forms.NumberInput(attrs={'class': 'input input-bordered w-full'}),
-            'date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
+            'date': forms.DateInput(attrs={'type': 'date', 'class': 'input input-bordered w-full'}),
+            'stock_out_quantity': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'min': '1'}),
         }
